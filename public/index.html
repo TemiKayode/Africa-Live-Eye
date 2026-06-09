@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <meta name="description" content="Real-time satellite monitoring of Africa — fires, aircraft, earthquakes, lightning, cyclones and more." />
+  <title>Africa Live Eye — Real-Time Satellite View</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<!-- ── Top Bar ──────────────────────────────────────────────────────────────── -->
+<header id="topbar">
+  <div class="topbar-left">
+    <div class="logo">
+      <span class="logo-icon">🌍</span>
+      <span class="logo-text">Africa <strong>Live Eye</strong></span>
+    </div>
+  </div>
+
+  <div class="topbar-center">
+    <div class="live-pill">
+      <span id="connection-status" class="status-dot live"></span>
+      <span class="live-label">LIVE</span>
+    </div>
+    <div id="utc-clock" class="utc-clock">00:00:00 UTC</div>
+    <div id="imagery-timestamp" class="timestamp">Loading imagery…</div>
+    <div class="stat-pill fire-pill">🔥 <span id="stat-fires">—</span></div>
+    <div class="stat-pill air-pill">✈️ <span id="stat-aircraft">—</span></div>
+    <div class="stat-pill quake-pill" id="quake-stat-pill" style="display:none">🌊 <span id="stat-earthquakes">—</span></div>
+    <div class="stat-pill cyclone-pill" id="cyclone-stat-pill" style="display:none">🌀 <span id="stat-cyclones">—</span></div>
+    <div id="mode-badge" class="mode-badge" style="display:none">DEMO</div>
+  </div>
+
+  <!-- Primary tools -->
+  <div class="topbar-tools">
+    <button id="pin-btn"   class="btn btn-tool" title="Drop location pin">📍 <span class="tool-label">Pin</span></button>
+    <button id="trace-btn" class="btn btn-tool" title="Trace route &amp; measure distance">✏️ <span class="tool-label">Trace</span></button>
+    <button id="clear-pins-btn"  class="btn btn-tool btn-ghost" title="Clear all pins">🗑 Pins</button>
+    <button id="clear-trace-btn" class="btn btn-tool btn-ghost" title="Clear route trace">🗑 Route</button>
+
+    <button id="locate-btn" class="btn btn-tool btn-blue" title="Show my current location on the map">🎯 <span class="tool-label">Locate Me</span></button>
+
+    <div class="tool-sep"></div>
+
+    <!-- Extended tools -->
+    <button id="anim-toggle-btn"     class="btn btn-tool btn-teal"   title="Time animation — animate satellite imagery">▶️ <span class="tool-label">Animate</span></button>
+    <button id="split-toggle-btn"    class="btn btn-tool btn-teal"   title="Split-screen date comparison">↔️ <span class="tool-label">Compare</span></button>
+    <button id="analytics-toggle-btn" class="btn btn-tool btn-teal"  title="Analytics charts &amp; trends">📊 <span class="tool-label">Analytics</span></button>
+    <button id="alerts-toggle-btn"   class="btn btn-tool btn-amber"  title="Alert zones — browser notifications">🔔 <span class="tool-label">Alerts</span></button>
+    <button id="report-btn"          class="btn btn-tool btn-purple" title="Generate PDF situation report">📄 <span class="tool-label">Report</span></button>
+  </div>
+
+  <div class="topbar-right">
+    <button id="share-btn" class="btn btn-icon btn-accent" title="Share this view">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+        <path d="m8.59 13.51 6.83 3.98M15.41 6.51l-6.82 3.98"/>
+      </svg>
+      <span>Share</span>
+    </button>
+
+    <div class="export-wrap">
+      <button id="export-btn" class="btn btn-icon" title="Export map">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        <span>Export</span>
+      </button>
+      <div id="export-dropdown" class="export-dropdown">
+        <div id="exp-png"   class="exp-item">🖼 PNG — current view</div>
+        <div id="exp-4k"    class="exp-item exp-4k">⭐ 4K PNG (3840×2160)</div>
+        <div id="exp-print" class="exp-item">🖨 Print / Save as PDF</div>
+      </div>
+    </div>
+
+    <button id="refresh-btn" class="btn btn-icon" title="Refresh all data">
+      <svg id="refresh-icon" viewBox="0 0 24 24" width="15" height="15" fill="none"
+           stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M1 4v6h6"/><path d="M23 20v-6h-6"/>
+        <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/>
+      </svg>
+    </button>
+  </div>
+</header>
+
+<!-- ── Sidebar Toggle ───────────────────────────────────────────────────────── -->
+<button id="sidebar-toggle" title="Toggle panel">&#9664;</button>
+
+<!-- ── Left Sidebar ─────────────────────────────────────────────────────────── -->
+<aside id="sidebar">
+
+  <!-- Search -->
+  <div class="sidebar-section">
+    <h3 class="section-title">Search</h3>
+    <div class="search-box">
+      <input id="search-input" type="text" placeholder="City, country, region…" autocomplete="off" />
+      <button id="search-btn" class="btn btn-search">
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+        </svg>
+      </button>
+      <div id="search-results" class="search-results"></div>
+    </div>
+  </div>
+
+  <!-- Base Imagery -->
+  <div class="sidebar-section">
+    <h3 class="section-title">Base Imagery</h3>
+    <div class="layer-group">
+      <label class="layer-option active" data-layer="esri">
+        <input type="radio" name="base-layer" value="esri" checked />
+        <span class="layer-thumb" style="background:linear-gradient(135deg,#2d4a1e,#1a3a2a,#0f2420)"></span>
+        <span class="layer-info"><span class="layer-name">Esri World Imagery</span><span class="layer-desc">High-res static · zoom 19</span></span>
+      </label>
+      <label class="layer-option" data-layer="mapbox" id="mapbox-option" style="display:none">
+        <input type="radio" name="base-layer" value="mapbox" />
+        <span class="layer-thumb" style="background:linear-gradient(135deg,#0d2137,#1a3a5c,#0a1a2e)"></span>
+        <span class="layer-info"><span class="layer-name">Mapbox Satellite ⭐</span><span class="layer-desc">Maxar · 30–50 cm · zoom 22</span></span>
+      </label>
+      <label class="layer-option" data-layer="viirs">
+        <input type="radio" name="base-layer" value="viirs" />
+        <span class="layer-thumb" style="background:linear-gradient(135deg,#1a2d3f,#243b52,#0d1f2d)"></span>
+        <span class="layer-info"><span class="layer-name">VIIRS Daily</span><span class="layer-desc">NASA SNPP · 375 m · daily</span></span>
+      </label>
+      <label class="layer-option" data-layer="modisT">
+        <input type="radio" name="base-layer" value="modisT" />
+        <span class="layer-thumb" style="background:linear-gradient(135deg,#2a1f3d,#3b2a52,#1f142d)"></span>
+        <span class="layer-info"><span class="layer-name">MODIS Terra</span><span class="layer-desc">NASA EOS · 250 m · daily</span></span>
+      </label>
+      <label class="layer-option" data-layer="modisA">
+        <input type="radio" name="base-layer" value="modisA" />
+        <span class="layer-thumb" style="background:linear-gradient(135deg,#1f2a3f,#2a3b52,#141f2d)"></span>
+        <span class="layer-info"><span class="layer-name">MODIS Aqua</span><span class="layer-desc">NASA EOS · 250 m · daily</span></span>
+      </label>
+    </div>
+  </div>
+
+  <!-- Imagery Date -->
+  <div class="sidebar-section">
+    <h3 class="section-title">
+      Imagery Date <span id="slider-date" class="date-chip"></span>
+      <button id="today-btn" class="btn-today" title="Jump to today">Today</button>
+    </h3>
+    <div class="slider-row">
+      <span class="slider-cap">−7d</span>
+      <input type="range" id="date-slider" min="0" max="7" value="6" />
+      <span class="slider-cap today-cap">Today</span>
+    </div>
+    <p class="slider-hint">VIIRS / MODIS · today's imagery updates ~3 h after overpass</p>
+  </div>
+
+  <!-- Live Activity Overlays -->
+  <div class="sidebar-section">
+    <h3 class="section-title">Live Activity</h3>
+    <div class="overlay-group">
+      <label class="overlay-option">
+        <input type="checkbox" name="overlay" value="fires" checked />
+        <span class="overlay-dot" style="background:#ff4400"></span>
+        <span class="overlay-label">Fire Hotspots<small>NASA FIRMS VIIRS · 3 h refresh</small></span>
+      </label>
+      <label class="overlay-option">
+        <input type="checkbox" name="overlay" value="aircraft" checked />
+        <span class="overlay-dot" style="background:#00d4ff"></span>
+        <span class="overlay-label">Aircraft Positions<small>OpenSky Network · every 45 s</small></span>
+      </label>
+      <label class="overlay-option">
+        <input type="checkbox" name="overlay" value="lightning" />
+        <span class="overlay-dot" style="background:#fff176"></span>
+        <span class="overlay-label">
+          Lightning Strikes
+          <span id="lightning-badge" class="data-badge demo-badge">DEMO</span>
+          <small>Blitzortung WebSocket · real-time</small>
+        </span>
+      </label>
+      <label class="overlay-option">
+        <input type="checkbox" name="overlay" value="earthquakes" />
+        <span class="overlay-dot" style="background:#4488ff"></span>
+        <span class="overlay-label">Earthquakes M2.5+<small>USGS · last 24 h · 5 min refresh</small></span>
+      </label>
+      <label class="overlay-option">
+        <input type="checkbox" name="overlay" value="cyclones" />
+        <span class="overlay-dot" style="background:#00e887"></span>
+        <span class="overlay-label">Tropical Cyclones<small>GDACS active storms · 30 min</small></span>
+      </label>
+      <label class="overlay-option">
+        <input type="checkbox" name="overlay" value="ships" />
+        <span class="overlay-dot" style="background:#7b9eff"></span>
+        <span class="overlay-label">Nautical / Shipping Lanes<small>OpenSeaMap reference</small></span>
+      </label>
+    </div>
+  </div>
+
+  <!-- Environmental Overlays (GIBS) -->
+  <div class="sidebar-section">
+    <h3 class="section-title">Environmental (GIBS)</h3>
+    <div class="overlay-group">
+      <label class="overlay-option">
+        <input type="checkbox" name="overlay" value="thermal" />
+        <span class="overlay-dot" style="background:#ff8800"></span>
+        <span class="overlay-label">Thermal Anomalies<small>MODIS Terra · heat / fire detection</small></span>
+      </label>
+      <label class="overlay-option">
+        <input type="checkbox" name="overlay" value="aerosol" />
+        <span class="overlay-dot" style="background:#c8a060"></span>
+        <span class="overlay-label">Dust &amp; Aerosol (AOD)<small>MODIS Terra · Sahara dust, smoke</small></span>
+      </label>
+      <label class="overlay-option">
+        <input type="checkbox" name="overlay" value="lst" />
+        <span class="overlay-dot" style="background:#ff3366"></span>
+        <span class="overlay-label">Land Surface Temp<small>MODIS Terra · heat &amp; drought</small></span>
+      </label>
+      <label class="overlay-option">
+        <input type="checkbox" name="overlay" value="ndvi" />
+        <span class="overlay-dot" style="background:#00cc44"></span>
+        <span class="overlay-label">Vegetation / NDVI<small>MODIS 8-day · green = healthy</small></span>
+      </label>
+      <label class="overlay-option">
+        <input type="checkbox" name="overlay" value="precip" />
+        <span class="overlay-dot" style="background:#44aaff"></span>
+        <span class="overlay-label">Precipitation (GPM)<small>NASA IMERG · near-real-time</small></span>
+      </label>
+      <label class="overlay-option">
+        <input type="checkbox" name="overlay" value="nightlights" />
+        <span class="overlay-dot" style="background:#ffe066"></span>
+        <span class="overlay-label">Night Lights<small>VIIRS Black Marble · urban activity</small></span>
+      </label>
+      <label class="overlay-option">
+        <input type="checkbox" name="overlay" value="labels" />
+        <span class="overlay-dot" style="background:#aabbdd"></span>
+        <span class="overlay-label">Place Labels<small>Cities, borders, roads</small></span>
+      </label>
+    </div>
+  </div>
+
+  <!-- Activity Feed -->
+  <div class="sidebar-section events-section">
+    <h3 class="section-title">
+      Activity Feed
+      <div class="feed-tabs">
+        <button class="feed-tab active"  data-tab="fires">🔥</button>
+        <button class="feed-tab"         data-tab="aircraft">✈️</button>
+        <button class="feed-tab"         data-tab="earthquakes">🌊</button>
+        <button class="feed-tab"         data-tab="cyclones">🌀</button>
+      </div>
+    </h3>
+    <div id="events-list" class="events-list">
+      <div class="events-placeholder"><div class="spinner"></div><span>Loading…</span></div>
+    </div>
+  </div>
+
+</aside>
+
+<!-- ── Map (main, left pane in split mode) ──────────────────────────────────── -->
+<div id="map"></div>
+
+<!-- ── Split-screen: right pane & divider ───────────────────────────────────── -->
+<div id="split-divider" style="display:none"></div>
+<div id="map2"          style="display:none"></div>
+
+<!-- Split-screen right controls (date picker) -->
+<div id="split-right-controls" style="display:none" class="split-right-controls">
+  <div class="split-pane-label left-label">LEFT · <span id="split-date-label-left">—</span></div>
+  <div class="split-pane-label right-label">RIGHT · <span id="split-date-label-right">—</span>
+    <input type="date" id="split-right-date" class="split-date-input" />
+  </div>
+</div>
+
+<!-- ── Animation bar ────────────────────────────────────────────────────────── -->
+<div id="anim-bar" class="anim-bar">
+  <div class="anim-controls">
+    <button id="anim-play" class="btn anim-btn" title="Play animation">▶</button>
+    <button id="anim-stop" class="btn anim-btn" title="Stop" style="display:none">⏹</button>
+    <div class="anim-meta">
+      <span class="anim-label">Frame:</span>
+      <span id="anim-date-label" class="anim-date">—</span>
+    </div>
+    <select id="anim-speed" class="anim-select" title="Frame speed">
+      <option value="400">Fast (0.4s)</option>
+      <option value="900" selected>Normal (0.9s)</option>
+      <option value="1600">Slow (1.6s)</option>
+    </select>
+    <select id="anim-span" class="anim-select" title="Date range">
+      <option value="7">7 days</option>
+      <option value="14">14 days</option>
+      <option value="30" selected>30 days</option>
+    </select>
+    <div class="anim-progress-wrap">
+      <div id="anim-progress" class="anim-progress-bar"></div>
+    </div>
+    <button class="btn anim-close-btn" onclick="document.getElementById('anim-bar').classList.remove('visible'); document.getElementById('anim-toggle-btn').classList.remove('active-tool'); if(window.stopAnimation)stopAnimation();">✕</button>
+  </div>
+</div>
+
+<!-- ── Right-click Context Menu ─────────────────────────────────────────────── -->
+<div id="context-menu" class="context-menu">
+  <div id="ctx-pin"         class="ctx-item">📍 Drop pin here</div>
+  <div id="ctx-copy-coords" class="ctx-item">📋 Copy coordinates</div>
+  <div id="ctx-center"      class="ctx-item">🎯 Center map here</div>
+  <div id="ctx-zoom-in"     class="ctx-item">🔍 Zoom in here</div>
+  <div class="ctx-sep"></div>
+  <div id="ctx-share"       class="ctx-item ctx-share">🔗 Share this location</div>
+</div>
+
+<!-- ── Analytics Panel (right sidebar) ──────────────────────────────────────── -->
+<div id="analytics-panel" class="analytics-panel">
+  <div class="analytics-header">
+    <span>📊 Analytics</span>
+    <button id="analytics-close-btn" class="panel-close-btn">✕</button>
+  </div>
+  <div id="analytics-loading" class="analytics-loading" style="display:none">
+    <div class="spinner"></div> Loading…
+  </div>
+  <div class="analytics-cards">
+    <div class="analytics-card">
+      <div class="ac-label">Fires (7 days)</div>
+      <div class="ac-value fire-color" id="analytics-total-fires">—</div>
+    </div>
+    <div class="analytics-card">
+      <div class="ac-label">Peak Day</div>
+      <div class="ac-value" id="analytics-peak-day">—</div>
+    </div>
+    <div class="analytics-card">
+      <div class="ac-label">Earthquakes (24h)</div>
+      <div class="ac-value quake-color" id="analytics-total-eq">—</div>
+    </div>
+  </div>
+  <div class="analytics-section">
+    <div class="analytics-chart-title">🔥 Daily Fire Hotspots (7 days)</div>
+    <div class="analytics-chart-wrap">
+      <canvas id="fire-chart"></canvas>
+    </div>
+  </div>
+  <div class="analytics-section">
+    <div class="analytics-chart-title">🌊 Earthquakes by Magnitude</div>
+    <div class="analytics-chart-wrap eq-chart-wrap">
+      <canvas id="eq-chart"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- ── Alerts Panel ──────────────────────────────────────────────────────────── -->
+<div id="alerts-panel" class="alerts-panel">
+  <div class="analytics-header">
+    <span>🔔 Alert Zones</span>
+    <button id="alerts-panel-close" class="panel-close-btn">✕</button>
+  </div>
+  <div class="alerts-body">
+    <p class="alerts-desc">Draw polygons on the map — get browser notifications when fires or earthquakes are detected inside.</p>
+    <div class="alerts-notif-row">
+      <span id="alerts-notif-status" class="notif-status">Not enabled</span>
+      <button id="alerts-enable-notif" class="btn btn-accent-solid btn-sm">Enable Notifications</button>
+    </div>
+    <div class="alerts-actions">
+      <button id="alerts-draw-btn"    class="btn btn-accent-solid">✏️ Draw Zone</button>
+      <button id="alerts-cancel-draw" class="btn btn-ghost-sm" style="display:none">Cancel</button>
+      <button id="alerts-finish-draw" class="btn btn-accent-solid" style="display:none">✓ Finish Zone</button>
+    </div>
+    <div id="alerts-draw-hint" class="alerts-hint" style="display:none"></div>
+    <div id="alerts-zone-list" class="alerts-zone-list">
+      <div class="alerts-empty">No zones yet. Draw a polygon to start monitoring.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Share Modal ───────────────────────────────────────────────────────────── -->
+<div id="share-modal" class="modal" style="display:none">
+  <div id="share-modal-backdrop" class="modal-backdrop"></div>
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3>🔗 Share This View</h3>
+      <button id="share-modal-close" class="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="modal-hint">Anyone with this link sees your exact map view, active layers, pins, and route.</p>
+      <div class="share-url-row">
+        <input id="share-url-input" type="text" readonly placeholder="Generating link…" />
+        <button id="copy-url-btn" class="btn btn-accent-solid">Copy</button>
+      </div>
+      <div class="qr-wrap">
+        <img id="qr-img" src="" alt="QR Code" />
+        <p class="qr-hint">Scan to open on mobile</p>
+      </div>
+      <div class="modal-export-row">
+        <button class="btn btn-export-modal" onclick="document.getElementById('share-modal').style.display='none'; document.getElementById('exp-png').click()">🖼 PNG</button>
+        <button class="btn btn-export-modal" onclick="document.getElementById('share-modal').style.display='none'; document.getElementById('exp-4k').click()">⭐ 4K</button>
+        <button class="btn btn-export-modal" onclick="window.print()">🖨 Print</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Report Modal ──────────────────────────────────────────────────────────── -->
+<div id="report-modal" class="modal" style="display:none">
+  <div id="report-modal-backdrop" class="modal-backdrop"></div>
+  <div class="modal-box modal-box-report">
+    <div class="modal-header">
+      <h3>📄 Generate Situation Report</h3>
+      <button id="report-modal-close" class="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="report-stats">
+        <div class="rpt-stat">🔥 <strong id="rpt-fire-count">—</strong> fire hotspots</div>
+        <div class="rpt-stat">✈️ <strong id="rpt-aircraft-count">—</strong> aircraft</div>
+        <div class="rpt-stat">🌊 <strong id="rpt-eq-count">—</strong> earthquakes</div>
+        <div class="rpt-stat">📅 Imagery: <strong id="rpt-date">—</strong></div>
+      </div>
+      <p class="modal-hint">The PDF will include a map screenshot, fire data table, earthquake table, and summary statistics.</p>
+      <button id="generate-report-btn" class="btn btn-accent-solid btn-full">📄 Generate &amp; Download PDF</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Bottom Bar ───────────────────────────────────────────────────────────── -->
+<footer id="bottombar">
+  <span id="coordinates" class="coords">Right-click map to pin &amp; share any location</span>
+  <span class="attribution">
+    <a href="https://earthdata.nasa.gov/eosdis/science-system-description/eosdis-components/gibs" target="_blank" rel="noopener">NASA GIBS</a> ·
+    <a href="https://firms.modaps.eosdis.nasa.gov/" target="_blank" rel="noopener">FIRMS</a> ·
+    <a href="https://opensky-network.org" target="_blank" rel="noopener">OpenSky</a> ·
+    <a href="https://earthquake.usgs.gov" target="_blank" rel="noopener">USGS</a> ·
+    <a href="https://www.gdacs.org" target="_blank" rel="noopener">GDACS</a> ·
+    <a href="https://blitzortung.org" target="_blank" rel="noopener">Blitzortung</a>
+  </span>
+  <span id="zoom-level">Zoom 4</span>
+</footer>
+
+<!-- ── Toast Container ──────────────────────────────────────────────────────── -->
+<div id="toast-container" aria-live="polite"></div>
+
+<!-- ── Scripts ──────────────────────────────────────────────────────────────── -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" defer></script>
+<script src="/socket.io/socket.io.js"></script>
+
+<!-- Core -->
+<script src="js/app.js"></script>
+
+<!-- Feature modules (load after app.js defines map + globals) -->
+<script src="js/modules/overlays.js"    defer></script>
+<script src="js/modules/animation.js"   defer></script>
+<script src="js/modules/splitscreen.js" defer></script>
+<script src="js/modules/analytics.js"   defer></script>
+<script src="js/modules/alerts.js"      defer></script>
+<script src="js/modules/report.js"      defer></script>
+</body>
+</html>

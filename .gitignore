@@ -1,0 +1,14 @@
+node_modules/
+.env
+*.log
+server.log
+server.err
+user_sessions.log
+.DS_Store
+Thumbs.db
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+dist/
+.cache/
