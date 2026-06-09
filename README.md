@@ -30,8 +30,8 @@ Real-time satellite monitoring platform for the African continent. Combines NASA
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/<your-handle>/Birdeye.git
-cd Birdeye
+git clone https://github.com/TemiKayode/Africa-Live-Eye.git
+cd Africa-Live-Eye
 
 # 2. Install dependencies
 npm install
